@@ -543,7 +543,3 @@ with tab4:
 st.markdown("---")
 st.caption(T[lang]["footer"])
 
-st.caption(t("footer"))
-
-
-
