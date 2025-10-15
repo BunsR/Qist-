@@ -178,21 +178,28 @@ YAHOO_SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
 def yahoo_search(query: str, quotes_count: int = 15):
     if not query or len(query.strip()) < 2:
         return []
+
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://finance.yahoo.com/",
     }
-    params = {"q": query.strip(), "quotesCount": quotes_count, "newsCount": 0, "lang": "en-US", "region": "US"}
+    params = {
+        "q": query.strip(),
+        "quotesCount": quotes_count,
+        "newsCount": 0,
+        "lang": "en-US",
+        "region": "US",
+    }
 
-    # 1) primaire endpoint
+    # 1) primary: query2
     try:
         r = requests.get(YAHOO_SEARCH_URL, params=params, headers=headers, timeout=10)
         r.raise_for_status()
         data = r.json() or {}
-        keep_types = {"EQUITY"}  # evt. voeg "ETF" toe als je ETFs ook hier wilt zoeken
+        keep_types = {"EQUITY"}
         out = []
-        for q in data.get("quotes", []) or []:
+        for q in (data.get("quotes", []) or []):
             if q.get("quoteType") in keep_types and q.get("symbol"):
                 out.append({
                     "symbol": q.get("symbol"),
@@ -200,12 +207,67 @@ def yahoo_search(query: str, quotes_count: int = 15):
                     "exchange": q.get("exchange") or q.get("exchDisp"),
                     "score": q.get("score", 0.0),
                 })
-        # dedup + sort
         seen, uniq = set(), []
         for item in sorted(out, key=lambda x: x["score"], reverse=True):
             if item["symbol"] not in seen:
                 uniq.append(item); seen.add(item["symbol"])
         return uniq
+
+    except requests.HTTPError:
+        # 2) secondary: query1
+        try:
+            r = requests.get(
+                "https://query1.finance.yahoo.com/v1/finance/search",
+                params=params, headers=headers, timeout=10
+            )
+            r.raise_for_status()
+            data = r.json() or {}
+            keep_types = {"EQUITY"}
+            out = []
+            for q in (data.get("quotes", []) or []):
+                if q.get("quoteType") in keep_types and q.get("symbol"):
+                    out.append({
+                        "symbol": q.get("symbol"),
+                        "shortname": q.get("shortname") or q.get("longname") or q.get("name"),
+                        "exchange": q.get("exchange") or q.get("exchDisp"),
+                        "score": q.get("score", 0.0),
+                    })
+            seen, uniq = set(), []
+            for item in sorted(out, key=lambda x: x["score"], reverse=True):
+                if item["symbol"] not in seen:
+                    uniq.append(item); seen.add(item["symbol"])
+            return uniq
+        except Exception:
+            # 3) tertiary: autoc endpoint
+            try:
+                r = requests.get(
+                    "https://autoc.finance.yahoo.com/autoc",
+                    params={"query": query.strip(), "region": 1, "lang": "en"},
+                    headers=headers, timeout=10
+                )
+                r.raise_for_status()
+                js = r.json() or {}
+                out = []
+                for it in (js.get("ResultSet", {}).get("Result", []) or []):
+                    typ = (it.get("typeDisp") or "").lower()
+                    if typ in {"equity", "etf"} and it.get("symbol"):
+                        out.append({
+                            "symbol": it.get("symbol"),
+                            "shortname": it.get("name") or it.get("symbol"),
+                            "exchange": it.get("exchDisp") or it.get("exch") or "",
+                            "score": 0,
+                        })
+                seen, uniq = set(), []
+                for item in out:
+                    if item["symbol"] not in seen:
+                        uniq.append(item); seen.add(item["symbol"])
+                return uniq
+            except Exception:
+                return []
+    except Exception:
+        return []
+
+
 
     except requests.HTTPError:
         # 2) fallback: autoc endpoint
@@ -474,4 +536,5 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(t("footer"))
+
 
