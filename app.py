@@ -170,129 +170,125 @@ with st.popover(t("beginner_open")):
     st.markdown(t("guide_steps"))
 
 # ---------- Yahoo search helpers ----------
+import requests
+
 YAHOO_SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 def yahoo_search(query: str, quotes_count: int = 15):
     if not query or len(query.strip()) < 2:
         return []
-    params = {"q": query.strip(), "quotesCount": quotes_count, "newsCount": 0, "lang": "en-US", "region": "US"}
-    r = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json() or {}
-    keep_types = {"EQUITY"}
-    out = []
-    for q in data.get("quotes", []):
-        if q.get("quoteType") in keep_types and q.get("symbol"):
-            out.append({
-                "symbol": q.get("symbol"),
-                "shortname": q.get("shortname") or q.get("longname") or q.get("name"),
-                "exchange": q.get("exchange") or q.get("exchDisp"),
-                "score": q.get("score", 0.0)
-            })
-    # unique + sort by score
-    seen, uniq = set(), []
-    for item in sorted(out, key=lambda x: x["score"], reverse=True):
-        if item["symbol"] not in seen:
-            uniq.append(item); seen.add(item["symbol"])
-    return uniq
-
-@st.cache_data(ttl=3600)
-def fetch_symbol_metadata(symbol: str):
-    tk = yf.Ticker(symbol)
-    try:
-        info = tk.info or {}
-    except Exception:
-        info = {}
-    fast = getattr(tk, "fast_info", {}) or {}
-    hist_ok = False
-    try:
-        hist = tk.history(period="1mo")
-        hist_ok = len(hist) > 0
-    except Exception:
-        pass
-    # balance sheet
-    total_debt = total_assets = None
-    try:
-        bs = tk.balance_sheet
-        if isinstance(bs, pd.DataFrame) and not bs.empty:
-            if "Total Debt" in bs.index:
-                total_debt = pd.to_numeric(bs.loc["Total Debt"].dropna().iloc[0], errors="coerce")
-            if "Total Assets" in bs.index:
-                total_assets = pd.to_numeric(bs.loc["Total Assets"].dropna().iloc[0], errors="coerce")
-    except Exception:
-        pass
-    return {
-        "symbol": symbol,
-        "name": info.get("longName") or info.get("shortName"),
-        "exchange": info.get("exchange") or fast.get("exchange"),
-        "currency": info.get("currency") or fast.get("currency"),
-        "country": info.get("country"),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-        "marketCap": info.get("marketCap"),
-        "totalDebt": None if pd.isna(total_debt) else total_debt,
-        "totalAssets": None if pd.isna(total_assets) else total_assets,
-        "is_valid": bool(info) or hist_ok
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://finance.yahoo.com/",
     }
+    params = {"q": query.strip(), "quotesCount": quotes_count, "newsCount": 0, "lang": "en-US", "region": "US"}
 
-def compute_debt_ratio(meta: dict):
-    debt = meta.get("totalDebt"); mc = meta.get("marketCap"); assets = meta.get("totalAssets")
-    if debt is None:
-        return None, t("debt_unknown")
-    if mc:
-        return float(debt)/float(mc), t("debt_basis_mc")
-    if assets:
-        return float(debt)/float(assets), t("debt_basis_assets")
-    return None, t("debt_unknown")
+    # 1) primaire endpoint
+    try:
+        r = requests.get(YAHOO_SEARCH_URL, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json() or {}
+        keep_types = {"EQUITY"}  # evt. voeg "ETF" toe als je ETFs ook hier wilt zoeken
+        out = []
+        for q in data.get("quotes", []) or []:
+            if q.get("quoteType") in keep_types and q.get("symbol"):
+                out.append({
+                    "symbol": q.get("symbol"),
+                    "shortname": q.get("shortname") or q.get("longname") or q.get("name"),
+                    "exchange": q.get("exchange") or q.get("exchDisp"),
+                    "score": q.get("score", 0.0),
+                })
+        # dedup + sort
+        seen, uniq = set(), []
+        for item in sorted(out, key=lambda x: x["score"], reverse=True):
+            if item["symbol"] not in seen:
+                uniq.append(item); seen.add(item["symbol"])
+        return uniq
+
+    except requests.HTTPError:
+        # 2) fallback: autoc endpoint
+        try:
+            r = requests.get(
+                "https://autoc.finance.yahoo.com/autoc",
+                params={"query": query.strip(), "region": 1, "lang": "en"},
+                headers=headers, timeout=10
+            )
+            r.raise_for_status()
+            js = r.json() or {}
+            out = []
+            for it in (js.get("ResultSet", {}).get("Result", []) or []):
+                typ = (it.get("typeDisp") or "").lower()
+                if typ in {"equity", "etf"} and it.get("symbol"):
+                    out.append({
+                        "symbol": it.get("symbol"),
+                        "shortname": it.get("name") or it.get("symbol"),
+                        "exchange": it.get("exchDisp") or it.get("exch") or "",
+                        "score": 0
+                    })
+            # dedup
+            seen, uniq = set(), []
+            for item in out:
+                if item["symbol"] not in seen:
+                    uniq.append(item); seen.add(item["symbol"])
+            return uniq
+        except Exception:
+            return []
+    except Exception:
+        return []
+
 
 # ---------- Halal regels ----------
-HARAM_KEYWORDS = {"alcohol", "brew", "beer", "wine", "casino", "gambl", "pork", "bank", "insur", "adult", "porn", "weapon", "defense", "tobacco", "cig"}
-HARAM_SECTORS = {"Alcohol","Gambling","Pork","Conventional Banking","Insurance","Adult Entertainment","Weapons","Tobacco"}
+import re
 
-def is_haram_activity(sector: Optional[str], industry: Optional[str]) -> Optional[str]:
-    if sector and sector in HARAM_SECTORS:
+HARAM_SECTORS = {
+    "Alcohol","Gambling","Pork","Conventional Banking","Insurance",
+    "Adult Entertainment","Weapons","Tobacco"
+}
+
+# brede trefwoorden (naam, sector, industry)
+_HARAM_PAT = re.compile(
+    r"(alcohol|brew|beer|wine|casino|gambl|pork|adult|porn|weapon|tobacco|cig|cannabis|marijuana|"
+    r"\bbank(s|ing)?\b|\binsur(ance|er|ers)?\b|\breinsurance\b|\bmortgage\b|\bcredit\b|\blending\b|\bloan\b|"
+    r"\bconsumer finance\b|\bthrifts?\b|\bcapital markets\b|\breit\b)",
+    re.IGNORECASE
+)
+
+def is_haram_activity(name: Optional[str], sector: Optional[str], industry: Optional[str]) -> Optional[str]:
+    # sector direct uitgesloten
+    if sector in HARAM_SECTORS:
         return f"Excluded sector: {sector}"
-    text = " ".join([str(sector or ""), str(industry or "")]).lower()
-    return next((k for k in HARAM_KEYWORDS if k in text), None)
+
+    text = " ".join([str(name or ""), str(sector or ""), str(industry or "")]).lower()
+
+    # uitzondering: als “islamic” samen met bank/insurance voorkomt → niet meteen haram, laat aan classificatie over
+    if "islamic" in text and ("bank" in text or "insur" in text):
+        return None
+
+    m = _HARAM_PAT.search(text)
+    if m:
+        kw = m.group(0)
+        return f"Conventional finance/haram activity detected ({kw})"
+    return None
 
 def classify_equity(meta: dict) -> Tuple[str, List[str]]:
-    """Return status + reasons. Status one of: halal_full, halal, doubt, not_halal, unclassified."""
     reasons = []
-    # 1) activiteitenscherm
-    bad = is_haram_activity(meta.get("sector"), meta.get("industry"))
+    bad = is_haram_activity(meta.get("name"), meta.get("sector"), meta.get("industry"))
     if bad:
-        return "not_halal", [f"Business activity contains/exact sector excluded ({bad})."]
-    # 2) schuld-screen
+        return "not_halal", [bad]
+
     ratio, basis = compute_debt_ratio(meta)
     if ratio is None:
         return "unclassified", ["Insufficient data to compute debt ratio."]
-    pct = ratio*100.0
+    pct = ratio * 100.0
     if pct == 0:
         return "halal_full", ["No interest-bearing debt."]
     if pct <= 30:
         return "halal", [f"Debt ratio {pct:.2f}% (≤ 30%, {basis})."]
     if 30 < pct <= 33:
-        return "doubt", [f"Debt ratio {pct:.2f}% (between 30–33%, {basis})."]
+        return "doubt", [f"Debt ratio {pct:.2f}% (30–33%, {basis})."]
     return "not_halal", [f"Debt ratio {pct:.2f}% (> 33%, {basis})."]
-
-def classify_etf(is_certified: bool, halal_pct: int, pur_pct: int) -> Tuple[str, List[str]]:
-    if is_certified:
-        return "halal", ["Externally Shariah-certified."]
-    if halal_pct >= 95 and pur_pct < 5:
-        return "halal", [f"Holdings ≈ {halal_pct}% halal. Purification {pur_pct}%."]
-    if halal_pct == 0 and pur_pct == 0:
-        return "unclassified", ["Insufficient info about holdings; cannot assess."]
-    return "doubt", [f"Holdings {halal_pct}%, purification {pur_pct}% (needs review)."]
-
-def classify_crypto(violates_use: bool, fixed_yield: bool, staking_service: bool, interest_like: bool) -> Tuple[str, List[str]]:
-    if violates_use:
-        return "not_halal", ["Use-case includes prohibited activities (e.g., gambling/interest/adult)."]
-    if fixed_yield:
-        return "not_halal", ["Fixed/guaranteed yield resembles riba (interest)."]
-    if staking_service and not interest_like:
-        return "halal", ["Staking rewards based on service/fees (not interest)."]
-    return "unclassified", ["Insufficient structure/info → needs scholar review."]
 
 LABELS = {
     "nl": {
@@ -478,3 +474,4 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(t("footer"))
+
