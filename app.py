@@ -267,41 +267,67 @@ def yahoo_search(query: str, quotes_count: int = 15):
 
 @st.cache_data(ttl=3600)
 def fetch_symbol_metadata(symbol: str):
-    """Kerninfo + balansitems via yfinance, met defensieve afhandeling."""
+    """Kerninfo + balansitems via yfinance, maar zonder hard fast_info te gebruiken (voorkomt KeyError)."""
     tk = yf.Ticker(symbol)
+
+    # 1) Basis info
     try:
         info = tk.info or {}
     except Exception:
         info = {}
-    fast = getattr(tk, "fast_info", {}) or {}
+
+    # 2) Voorzichtig fast_info: alleen via helper en volledig try/except
+    def fast_value(key: str):
+        try:
+            fi = getattr(tk, "fast_info", None)
+            if fi is None:
+                return None
+            try:
+                return fi.get(key, None)  # kan netwerk call doen; mag ook None teruggeven
+            except Exception:
+                return None
+        except Exception:
+            return None
+
+    exchange = info.get("exchange") or fast_value("exchange")
+    currency = info.get("currency") or fast_value("currency")
+
+    # 3) Bestaan van koersdata (validatie)
     hist_ok = False
     try:
         hist = tk.history(period="1mo")
         hist_ok = len(hist) > 0
     except Exception:
         pass
+
+    # 4) Balans (schulden/activa)
     total_debt = total_assets = None
     try:
         bs = tk.balance_sheet
         if isinstance(bs, pd.DataFrame) and not bs.empty:
+            # ‘Total Debt’ is preferent; als dat ontbreekt kun je evt. ‘Total Liabilities’ gebruiken
             if "Total Debt" in bs.index:
                 total_debt = pd.to_numeric(bs.loc["Total Debt"].dropna().iloc[0], errors="coerce")
+            elif "Total Liabilities" in bs.index:
+                total_debt = pd.to_numeric(bs.loc["Total Liabilities"].dropna().iloc[0], errors="coerce")
             if "Total Assets" in bs.index:
                 total_assets = pd.to_numeric(bs.loc["Total Assets"].dropna().iloc[0], errors="coerce")
     except Exception:
         pass
+
     return {
         "symbol": symbol,
         "name": info.get("longName") or info.get("shortName"),
-        "exchange": info.get("exchange") or fast.get("exchange"),
-        "currency": info.get("currency") or fast.get("currency"),
+        "exchange": exchange,
+        "currency": currency,
         "country": info.get("country"),
         "sector": info.get("sector"),
         "industry": info.get("industry"),
         "marketCap": info.get("marketCap"),
         "totalDebt": None if pd.isna(total_debt) else total_debt,
         "totalAssets": None if pd.isna(total_assets) else total_assets,
-        "is_valid": bool(info) or hist_ok
+        "is_valid": bool(info) or hist_ok,
+
     }
 
 def compute_debt_ratio(meta: dict):
@@ -319,18 +345,13 @@ HARAM_SECTORS = {
     "Alcohol","Gambling","Pork","Conventional Banking","Insurance",
     "Adult Entertainment","Weapons","Tobacco"
 }
-# brede trefwoorden (naam, sector, industry) — let op: 'lending' (niet 'blending')
+# brede trefwoorden (naam, sector, industry)
 _HARAM_PAT = re.compile(
     r"(alcohol|brew|beer|wine|casino|gambl|pork|adult|porn|weapon|tobacco|cig|cannabis|marijuana|"
-    r"\bbank(s|ing)?\b|\binsur(ance|er|ers)?\b|\breinsurance\b|\bmortgage\b|\bcredit\b|\blending\b|\blending\b|\blending\b|\blending\b|\blending\b|\blending\b)",
+    r"\bbank(s|ing)?\b|\binsur(ance|er|ers)?\b|\breinsurance\b|\bmortgage\b|\bcredit\b|\blending\b|\bloans?\b|\breit\b|\bcapital markets\b|\bconsumer finance\b)",
     re.IGNORECASE
 )
-# Oeps: hierboven te veel; vervang door exacte 1x 'lending':
-_HARAM_PAT = re.compile(
-    r"(alcohol|brew|beer|wine|casino|gambl|pork|adult|porn|weapon|tobacco|cig|cannabis|marijuana|"
-    r"\bbank(s|ing)?\b|\binsur(ance|er|ers)?\b|\breinsurance\b|\bmortgage\b|\bcredit\b|\blending\b|\breit\b|\bcapital markets\b|\bconsumer finance\b|\bloans?\b)",
-    re.IGNORECASE
-)
+
 
 def is_haram_activity(name: Optional[str], sector: Optional[str], industry: Optional[str]) -> Optional[str]:
     if sector in HARAM_SECTORS:
@@ -542,4 +563,5 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
