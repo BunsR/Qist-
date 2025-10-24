@@ -305,7 +305,6 @@ def fetch_symbol_metadata(symbol: str):
     try:
         bs = tk.balance_sheet
         if isinstance(bs, pd.DataFrame) and not bs.empty:
-            # ‘Total Debt’ is preferent; als dat ontbreekt kun je evt. ‘Total Liabilities’ gebruiken
             if "Total Debt" in bs.index:
                 total_debt = pd.to_numeric(bs.loc["Total Debt"].dropna().iloc[0], errors="coerce")
             elif "Total Liabilities" in bs.index:
@@ -327,7 +326,6 @@ def fetch_symbol_metadata(symbol: str):
         "totalDebt": None if pd.isna(total_debt) else total_debt,
         "totalAssets": None if pd.isna(total_assets) else total_assets,
         "is_valid": bool(info) or hist_ok,
-
     }
 
 def compute_debt_ratio(meta: dict):
@@ -345,13 +343,12 @@ HARAM_SECTORS = {
     "Alcohol","Gambling","Pork","Conventional Banking","Insurance",
     "Adult Entertainment","Weapons","Tobacco"
 }
-# brede trefwoorden (naam, sector, industry)
+# brede trefwoorden (naam, sector, industry) — let op: 'lending' (niet 'blending')
 _HARAM_PAT = re.compile(
     r"(alcohol|brew|beer|wine|casino|gambl|pork|adult|porn|weapon|tobacco|cig|cannabis|marijuana|"
     r"\bbank(s|ing)?\b|\binsur(ance|er|ers)?\b|\breinsurance\b|\bmortgage\b|\bcredit\b|\blending\b|\bloans?\b|\breit\b|\bcapital markets\b|\bconsumer finance\b)",
     re.IGNORECASE
 )
-
 
 def is_haram_activity(name: Optional[str], sector: Optional[str], industry: Optional[str]) -> Optional[str]:
     if sector in HARAM_SECTORS:
@@ -563,5 +560,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
+
 
 
