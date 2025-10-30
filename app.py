@@ -11,7 +11,7 @@ import requests
 import streamlit as st
 import yfinance as yf
 
-APP_VERSION = "2025-10-15-v4"
+APP_VERSION = "2025-10-15-v5"
 
 # ---------- Basis-config ----------
 st.set_page_config(page_title="Qist – Check", page_icon="✅", layout="centered")
@@ -162,7 +162,8 @@ with colA:
     st.caption(t("brand_caption"))
     st.caption(f"Build: {APP_VERSION}")
 with colB:
-    sel = st.radio(t("language"), options=list(LANGS.keys()), format_func=lambda k: LANGS[k], index=0 if lang=="nl" else 1)
+    sel = st.radio(t("language"), options=list(LANGS.keys()),
+                   format_func=lambda k: LANGS[k], index=0 if lang == "nl" else 1)
     if sel != lang:
         st.session_state.lang = sel
         st.rerun()
@@ -267,19 +268,7 @@ def yahoo_search(query: str, quotes_count: int = 15):
 
 @st.cache_data(ttl=3600)
 def fetch_symbol_metadata(symbol: str):
-    """Kerninfo + balansitems via yfinance, maar zonder hard fast_info te gebruiken (voorkomt KeyError)."""
-    tk = yf.Ticker(symbol)
-
-    # 1) Basis info
-    try:
-        info = tk.info or {}
-    except Exception:
-        info = {}
-
-    # 2) Voorzichtig fast_info: alleen via helper en volledig try/except
-  @st.cache_data(ttl=3600)
-def fetch_symbol_metadata(symbol: str):
-    """Kerninfo + balansitems via yfinance, met robuuste validatie voor EU-tickers (PHIA.AS e.d.)."""
+    """Kerninfo + balansitems via yfinance, met robuuste validatie (EU-tickers zoals PHIA.AS)."""
     tk = yf.Ticker(symbol)
 
     # 1) Info (probeer get_info eerst)
@@ -333,7 +322,7 @@ def fetch_symbol_metadata(symbol: str):
     except Exception:
         pass
 
-    # 5) Validatie: ruimer maken (info óf history óf exchange/currency)
+    # 5) Validatie: ruimer (info óf history óf exchange/currency)
     is_valid = bool(info) or hist_ok or bool(exchange) or bool(currency)
 
     return {
@@ -582,6 +571,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
