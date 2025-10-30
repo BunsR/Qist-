@@ -277,13 +277,29 @@ def fetch_symbol_metadata(symbol: str):
         info = {}
 
     # 2) Voorzichtig fast_info: alleen via helper en volledig try/except
+  @st.cache_data(ttl=3600)
+def fetch_symbol_metadata(symbol: str):
+    """Kerninfo + balansitems via yfinance, met robuuste validatie voor EU-tickers (PHIA.AS e.d.)."""
+    tk = yf.Ticker(symbol)
+
+    # 1) Info (probeer get_info eerst)
+    info = {}
+    try:
+        info = tk.get_info() or {}
+    except Exception:
+        try:
+            info = tk.info or {}
+        except Exception:
+            info = {}
+
+    # 2) Voorzichtige fast_info helper
     def fast_value(key: str):
         try:
             fi = getattr(tk, "fast_info", None)
             if fi is None:
                 return None
             try:
-                return fi.get(key, None)  # kan netwerk call doen; mag ook None teruggeven
+                return fi.get(key, None)
             except Exception:
                 return None
         except Exception:
@@ -292,15 +308,18 @@ def fetch_symbol_metadata(symbol: str):
     exchange = info.get("exchange") or fast_value("exchange")
     currency = info.get("currency") or fast_value("currency")
 
-    # 3) Bestaan van koersdata (validatie)
+    # 3) History: probeer meerdere periodes
     hist_ok = False
-    try:
-        hist = tk.history(period="1mo")
-        hist_ok = len(hist) > 0
-    except Exception:
-        pass
+    for per in ["1mo", "3mo", "6mo", "1y"]:
+        try:
+            hist = tk.history(period=per)
+            if isinstance(hist, pd.DataFrame) and len(hist) > 0:
+                hist_ok = True
+                break
+        except Exception:
+            continue
 
-    # 4) Balans (schulden/activa)
+    # 4) Balans (IFRS fallback)
     total_debt = total_assets = None
     try:
         bs = tk.balance_sheet
@@ -314,6 +333,9 @@ def fetch_symbol_metadata(symbol: str):
     except Exception:
         pass
 
+    # 5) Validatie: ruimer maken (info óf history óf exchange/currency)
+    is_valid = bool(info) or hist_ok or bool(exchange) or bool(currency)
+
     return {
         "symbol": symbol,
         "name": info.get("longName") or info.get("shortName"),
@@ -325,7 +347,7 @@ def fetch_symbol_metadata(symbol: str):
         "marketCap": info.get("marketCap"),
         "totalDebt": None if pd.isna(total_debt) else total_debt,
         "totalAssets": None if pd.isna(total_assets) else total_assets,
-        "is_valid": bool(info) or hist_ok,
+        "is_valid": is_valid,
     }
 
 def compute_debt_ratio(meta: dict):
@@ -560,6 +582,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
