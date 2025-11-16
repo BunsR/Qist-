@@ -1,4 +1,4 @@
-# app.py — Qist – Check (NL/EN) + echte tickers + halal-screening + guide + analytics
+# app.py — Qist – Check (NL/EN) + echte tickers + halal-screening + uitgebreide uitleg + analytics
 import re
 import json
 import uuid
@@ -11,7 +11,7 @@ import requests
 import streamlit as st
 import yfinance as yf
 
-APP_VERSION = "2025-10-15-v5"
+APP_VERSION = "2025-10-15-v6"
 
 # ---------- Basis-config ----------
 st.set_page_config(page_title="Qist – Check", page_icon="✅", layout="centered")
@@ -36,6 +36,38 @@ T: Dict[str, Dict[str, str]] = {
             "4) Lees het **oordeel** (Halal / Niet halal / Ongeclassificeerd) met uitleg.\n"
             "5) Voor **ETF/crypto**: vul de vragen in → direct een oordeel.\n"
             "⚠️ Educatief; geen religieus of financieel advies."
+        ),
+        # Nieuwe: uitleg per tab
+        "guide_equity": (
+            "**Aandelen (🏢)**\n"
+            "- **Zoeken:** typ **bedrijfsnaam / ticker / ISIN** en kies de exacte notering.\n"
+            "- **Data:** sector/industrie/market cap/schuld komen via Yahoo Finance/YFinance. Bij EU-noteringen kan data soms ontbreken; dan kan het oordeel *Ongeclassificeerd* zijn.\n"
+            "- **Oordeel:**\n"
+            "  • Uitgesloten activiteiten (alcohol, gokken, varkensvlees, **conventionele banken/verzekeraars**, adult, wapens, tabak) → **Niet halal**.\n"
+            "  • **Schuldratio** (interestdragende schuld ÷ market cap of activa): ≤ 30% → **Halal**; 30–33% → **Twijfelachtig**; > 33% → **Niet halal**.\n"
+            "  • Geen/te weinig data → **Ongeclassificeerd**.\n"
+            "- **Tip:** kies de notering met het juiste achtervoegsel (bv. **PHIA.AS** voor Philips)."
+        ),
+        "guide_etf": (
+            "**ETF's (📦)**\n"
+            "- **Naam van de ETF:** vrije tekst.\n"
+            "- **Shariah-gecertificeerd (extern)?** Vink aan als er een officiële Shariah-certificering is (bv. Dow Jones/FTSE) → **direct Halal**.\n"
+            "- **Slider – Percentage halal holdings (%):** schatting van het deel van de posities dat een halal-screen doorstaat. Gebruik de **factsheet/holdings**; bij twijfel lager instellen.\n"
+            "- **Slider – Purificatie (%):** deel van inkomsten (vaak dividend) dat gezuiverd moet worden. < 5% komt vaak voor bij halal-ETF’s.\n"
+            "- **Regel in deze app:** gecertificeerd → Halal. Zonder certificaat: **≥ 95% halal & purificatie < 5%** → Halal; anders **Twijfelachtig**.\n"
+            "- Dit is een **educatieve** benadering; check altijd officiële documentatie."
+        ),
+        "guide_crypto": (
+            "**Crypto (🪙)**\n"
+            "- **Schendt halal-usecase?** Bijv. gokken, interest-based lending, adult → **Niet halal**.\n"
+            "- **Adverteert vaste (rente-achtige) yield?** ‘Guaranteed APR’ lijkt op **riba** → **Niet halal**.\n"
+            "- **Staking is service-based (geen rente)?** Beloningen als vergoeding voor netwerk/validatie-service (niet voor geld uitlenen) → kan **Halal** zijn **als** er géén rente-achtige voorwaarden zijn.\n"
+            "- **Rente-achtige voorwaarden aanwezig?** Dan verscherpt de uitkomst naar **Niet halal** of **Ongeclassificeerd**."
+        ),
+        "guide_analytics": (
+            "**Analytics (📊)**\n"
+            "- Voer je **Admin-PIN** in (ingesteld in *Secrets* → `admin.pin`).\n"
+            "- Statistieken loggen naar **Google Sheets** (als `logging.usage_sheet_id` + service-account gezet zijn) en naar **GA4** (als `ga.measurement_id` + `ga.api_secret` gezet zijn)."
         ),
         "tabs_equity": "🏢 Aandelen",
         "tabs_etf": "📦 ETF's",
@@ -101,6 +133,38 @@ T: Dict[str, Dict[str, str]] = {
             "5) For **ETF/crypto**: answer the questions → instant verdict.\n"
             "⚠️ Educational; not religious or financial advice."
         ),
+        # New: per-tab help
+        "guide_equity": (
+            "**Stocks (🏢)**\n"
+            "- **Search:** type **company / ticker / ISIN** and select the exact listing.\n"
+            "- **Data:** sector/industry/market cap/debt come from Yahoo Finance/YFinance. EU listings may be sparse → verdict can be *Unclassified*.\n"
+            "- **Verdict:**\n"
+            "  • Excluded activities (alcohol, gambling, pork, **conventional banking/insurance**, adult, weapons, tobacco) → **Not halal**.\n"
+            "  • **Debt ratio** (interest-bearing debt ÷ market cap or assets): ≤ 30% → **Halal**; 30–33% → **Doubtful**; > 33% → **Not halal**.\n"
+            "  • Missing data → **Unclassified**.\n"
+            "- **Tip:** pick the listing suffix correctly (e.g., **PHIA.AS** for Philips)."
+        ),
+        "guide_etf": (
+            "**ETFs (📦)**\n"
+            "- **Name of the ETF:** free text.\n"
+            "- **Shariah-certified (external)?** If there is an official Shariah certification (Dow Jones/FTSE), toggle it → **direct Halal**.\n"
+            "- **Slider – Percentage halal holdings (%):** estimate the share of holdings that pass a halal screen. Use **factsheet/holdings**; lower it if unsure.\n"
+            "- **Slider – Purification (%):** share of income (often dividends) to purify. < 5% is common in halal ETFs.\n"
+            "- **Rule in this app:** certified → Halal. Without certificate: **≥ 95% halal & purification < 5%** → Halal; else **Doubtful**.\n"
+            "- This is an **educational** simplification; always check official docs."
+        ),
+        "guide_crypto": (
+            "**Crypto (🪙)**\n"
+            "- **Violates halal use-case?** e.g., gambling, interest-based lending, adult → **Not halal**.\n"
+            "- **Advertises fixed (interest-like) yield?** ‘Guaranteed APR’ resembles **riba** → **Not halal**.\n"
+            "- **Staking is service-based (no interest)?** Rewards for providing network/validation service (not lending money) → may be **Halal** if **no interest-like terms**.\n"
+            "- **Interest-like terms present?** Tighten verdict to **Not halal**/**Unclassified**."
+        ),
+        "guide_analytics": (
+            "**Analytics (📊)**\n"
+            "- Enter your **Admin PIN** (set in *Secrets* → `admin.pin`).\n"
+            "- Stats log to **Google Sheets** (if `logging.usage_sheet_id` + service account set) and to **GA4** (if `ga.measurement_id` + `ga.api_secret` set)."
+        ),
         "tabs_equity": "🏢 Stocks",
         "tabs_etf": "📦 ETFs",
         "tabs_crypto": "🪙 Crypto",
@@ -156,14 +220,18 @@ def t(key: str) -> str:
     return T.get(lang, T["nl"]).get(key, key)
 
 # Taalkeuze + header
-colA, colB = st.columns([4,1])
+colA, colB = st.columns([4, 1])
 with colA:
     st.title(t("brand_title"))
     st.caption(t("brand_caption"))
     st.caption(f"Build: {APP_VERSION}")
 with colB:
-    sel = st.radio(t("language"), options=list(LANGS.keys()),
-                   format_func=lambda k: LANGS[k], index=0 if lang == "nl" else 1)
+    sel = st.radio(
+        t("language"),
+        options=list(LANGS.keys()),
+        format_func=lambda k: LANGS[k],
+        index=0 if lang == "nl" else 1,
+    )
     if sel != lang:
         st.session_state.lang = sel
         st.rerun()
@@ -172,6 +240,15 @@ with colB:
 with st.popover(t("beginner_open")):
     st.subheader(t("guide_title"))
     st.markdown(t("guide_steps"))
+    st.divider()
+    with st.expander(T[lang]["tabs_equity"]):
+        st.markdown(T[lang]["guide_equity"])
+    with st.expander(T[lang]["tabs_etf"]):
+        st.markdown(T[lang]["guide_etf"])
+    with st.expander(T[lang]["tabs_crypto"]):
+        st.markdown(T[lang]["guide_crypto"])
+    with st.expander(T[lang]["tabs_analytics"]):
+        st.markdown(T[lang]["guide_analytics"])
 
 # ---------- Yahoo search helpers ----------
 YAHOO_SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
@@ -219,8 +296,10 @@ def yahoo_search(query: str, quotes_count: int = 15):
     except requests.HTTPError:
         # 2) secondary
         try:
-            r = requests.get("https://query1.finance.yahoo.com/v1/finance/search",
-                             params=params, headers=headers, timeout=10)
+            r = requests.get(
+                "https://query1.finance.yahoo.com/v1/finance/search",
+                params=params, headers=headers, timeout=10,
+            )
             r.raise_for_status()
             data = r.json() or {}
             keep_types = {"EQUITY"}
@@ -241,9 +320,11 @@ def yahoo_search(query: str, quotes_count: int = 15):
         except Exception:
             # 3) tertiary
             try:
-                r = requests.get("https://autoc.finance.yahoo.com/autoc",
-                                 params={"query": query.strip(), "region": 1, "lang": "en"},
-                                 headers=headers, timeout=10)
+                r = requests.get(
+                    "https://autoc.finance.yahoo.com/autoc",
+                    params={"query": query.strip(), "region": 1, "lang": "en"},
+                    headers=headers, timeout=10,
+                )
                 r.raise_for_status()
                 js = r.json() or {}
                 out = []
@@ -351,8 +432,8 @@ def compute_debt_ratio(meta: dict):
 
 # ---------- Halal regels ----------
 HARAM_SECTORS = {
-    "Alcohol","Gambling","Pork","Conventional Banking","Insurance",
-    "Adult Entertainment","Weapons","Tobacco"
+    "Alcohol", "Gambling", "Pork", "Conventional Banking", "Insurance",
+    "Adult Entertainment", "Weapons", "Tobacco"
 }
 # brede trefwoorden (naam, sector, industry) — let op: 'lending' (niet 'blending')
 _HARAM_PAT = re.compile(
@@ -408,8 +489,8 @@ def classify_crypto(violates_use: bool, fixed_yield: bool, staking_service: bool
     return "unclassified", ["Insufficient structure/info → needs scholar review."]
 
 LABELS = {
-    "nl": {"halal_full":"✅ Volledig halal","halal":"✅ Halal","doubt":"⚠️ Twijfelachtig","not_halal":"❌ Niet halal","unclassified":"❓ Ongeclassificeerd"},
-    "en": {"halal_full":"✅ Fully halal","halal":"✅ Halal","doubt":"⚠️ Doubtful","not_halal":"❌ Not halal","unclassified":"❓ Unclassified"},
+    "nl": {"halal_full": "✅ Volledig halal", "halal": "✅ Halal", "doubt": "⚠️ Twijfelachtig", "not_halal": "❌ Niet halal", "unclassified": "❓ Ongeclassificeerd"},
+    "en": {"halal_full": "✅ Fully halal", "halal": "✅ Halal", "doubt": "⚠️ Doubtful", "not_halal": "❌ Not halal", "unclassified": "❓ Unclassified"},
 }
 def label(status: str) -> str:
     return LABELS.get(lang, LABELS["nl"]).get(status, status)
@@ -442,7 +523,7 @@ def log_to_sheet(event: str, extra: dict):
         sheet_id = st.secrets["logging"]["usage_sheet_id"]
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
-            scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive']
+            scopes=['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         )
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(sheet_id)
@@ -457,7 +538,9 @@ track_event_ga("page_view", {"page": "home", "build": APP_VERSION})
 log_to_sheet("page_view", {"page": "home", "build": APP_VERSION})
 
 # ---------- Tabs ----------
-tab1, tab2, tab3, tab4 = st.tabs([T[lang]["tabs_equity"], T[lang]["tabs_etf"], T[lang]["tabs_crypto"], T[lang]["tabs_analytics"]])
+tab1, tab2, tab3, tab4 = st.tabs([
+    T[lang]["tabs_equity"], T[lang]["tabs_etf"], T[lang]["tabs_crypto"], T[lang]["tabs_analytics"]
+])
 
 # ====== EQUITY TAB ======
 with tab1:
@@ -547,7 +630,7 @@ with tab4:
             sheet_id = st.secrets["logging"]["usage_sheet_id"]
             creds = Credentials.from_service_account_info(
                 st.secrets["gcp_service_account"],
-                scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive']
+                scopes=['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             )
             gc = gspread.authorize(creds)
             sh = gc.open_by_key(sheet_id)
@@ -571,6 +654,8 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
+
 
 
 
