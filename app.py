@@ -339,10 +339,44 @@ def yahoo_search(query: str, quotes_count: int = 15):
                 return []
     except Exception:
         return []
+# Extra fallback: quote endpoint (betrouwbaarder voor basisprofiel)
+QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+
+@st.cache_data(ttl=1800)
+def yahoo_quote(symbol: str) -> dict:
+    try:
+        r = requests.get(
+            QUOTE_URL,
+            params={"symbols": symbol},
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json, text/plain, */*",
+                "Referer": "https://finance.yahoo.com/",
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json() or {}
+        res = (data.get("quoteResponse", {}).get("result") or [])
+        if not res:
+            return {}
+        q = res[0]
+        return {
+            "name": q.get("longName") or q.get("shortName"),
+            "exchange": q.get("fullExchangeName") or q.get("exchange"),
+            "currency": q.get("currency"),
+            "marketCap": q.get("marketCap"),
+            # niet altijd aanwezig, maar soms wel:
+            "country": q.get("country"),
+            "sector": q.get("sector"),
+            "industry": q.get("industry"),
+        }
+    except Exception:
+        return {}
 
 @st.cache_data(ttl=3600)
 def fetch_symbol_metadata(symbol: str):
-    """Kerninfo + balansitems via yfinance, met robuuste validatie (EU-tickers zoals PHIA.AS)."""
+    """Kerninfo + balansitems via yfinance, met robuuste validatie en quote-fallback."""
     tk = yf.Ticker(symbol)
 
     # 1) Info (probeer get_info eerst)
@@ -355,7 +389,7 @@ def fetch_symbol_metadata(symbol: str):
         except Exception:
             info = {}
 
-    # 2) Voorzichtige fast_info helper
+    # 2) Voorzichtig fast_info helper
     def fast_value(key: str):
         try:
             fi = getattr(tk, "fast_info", None)
@@ -367,6 +401,68 @@ def fetch_symbol_metadata(symbol: str):
                 return None
         except Exception:
             return None
+
+    name = info.get("longName") or info.get("shortName")
+    exchange = info.get("exchange") or fast_value("exchange")
+    currency = info.get("currency") or fast_value("currency")
+    country = info.get("country")
+    sector = info.get("sector")
+    industry = info.get("industry")
+    marketCap = info.get("marketCap")
+
+    # 3) History: meerdere periodes proberen
+    hist_ok = False
+    for per in ["1mo", "3mo", "6mo", "1y"]:
+        try:
+            hist = tk.history(period=per)
+            if isinstance(hist, pd.DataFrame) and len(hist) > 0:
+                hist_ok = True
+                break
+        except Exception:
+            continue
+
+    # 4) Balance sheet
+    total_debt = total_assets = None
+    try:
+        bs = tk.balance_sheet
+        if isinstance(bs, pd.DataFrame) and not bs.empty:
+            if "Total Debt" in bs.index:
+                total_debt = pd.to_numeric(bs.loc["Total Debt"].dropna().iloc[0], errors="coerce")
+            elif "Total Liabilities" in bs.index:
+                total_debt = pd.to_numeric(bs.loc["Total Liabilities"].dropna().iloc[0], errors="coerce")
+            if "Total Assets" in bs.index:
+                total_assets = pd.to_numeric(bs.loc["Total Assets"].dropna().iloc[0], errors="coerce")
+    except Exception:
+        pass
+
+    # 5) Vul ontbrekende basis met quote-fallback
+    if not (name and exchange and currency and marketCap):
+        q = yahoo_quote(symbol)
+        name = name or q.get("name")
+        exchange = exchange or q.get("exchange")
+        currency = currency or q.get("currency")
+        marketCap = marketCap or q.get("marketCap")
+        country = country or q.get("country")
+        sector = sector or q.get("sector")
+        industry = industry or q.get("industry")
+
+    # 6) Validatie veel ruimer: zolang we iets bruikbaars hebben, gaan we door
+    is_valid = bool(name or exchange or currency or marketCap or hist_ok)
+
+    return {
+        "symbol": symbol,
+        "name": name,
+        "exchange": exchange,
+        "currency": currency,
+        "country": country,
+        "sector": sector,
+        "industry": industry,
+        "marketCap": marketCap,
+        "totalDebt": None if pd.isna(total_debt) else total_debt,
+        "totalAssets": None if pd.isna(total_assets) else total_assets,
+        "is_valid": is_valid,
+    }
+
 
     exchange = info.get("exchange") or fast_value("exchange")
     currency = info.get("currency") or fast_value("currency")
@@ -551,37 +647,47 @@ with tab1:
             options = {f"{r['symbol']} — {r['shortname']} ({r['exchange']})": r for r in results}
             choice = st.selectbox(T[lang]["choose_listing"], list(options.keys()))
             chosen = options[choice]
-            meta = fetch_symbol_metadata(chosen["symbol"])
-            if not meta["is_valid"]:
-                st.error("Listing kon niet gevalideerd worden / could not be validated.")
-            else:
-                st.success(T[lang]["valid_listing"])
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
-                    st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
-                    st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
-                    st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
-                with col2:
-                    st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
-                    st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
-                    st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
-                    mc = meta.get("marketCap")
-                    st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
-                ratio, basis = compute_debt_ratio(meta)
-                if ratio is None:
-                    st.info(f"{T[lang]['field_debt_ratio']}: {T[lang]['debt_unknown']}")
-                else:
-                    st.markdown(f"**{T[lang]['field_debt_ratio']}:** {ratio:.2%} ({basis})")
-                if st.button(T[lang]["check_equity"]):
-                    status, reasons = classify_equity(meta)
-                    st.markdown(f"### {T[lang]['result']}: {label(status)}")
-                    for r in reasons:
-                        st.write("•", r)
-                    st.markdown(f"**{T[lang]['equity_rules_title']}:**")
-                    st.markdown(T[lang]["equity_rules"])
-                    track_event_ga("check_equity", {"symbol": meta["symbol"], "status": status})
-                    log_to_sheet("check_equity", {"symbol": meta["symbol"], "status": status})
+        meta = fetch_symbol_metadata(chosen["symbol"])
+
+# Toon altijd; geef alleen een hint over datakwaliteit als het minimaal is
+st.success(T[lang]["valid_listing"])
+quality_msgs = []
+if not (meta.get("sector") or meta.get("industry")):
+    quality_msgs.append("Beperkt profiel (sector/industrie ontbreken)")
+if meta.get("totalDebt") is None or (not meta.get("marketCap") and not meta.get("totalAssets")):
+    quality_msgs.append("Schuldratio kon niet worden berekend (onvoldoende cijfers)")
+
+if quality_msgs:
+    st.info(" | ".join(quality_msgs))
+
+col1, col2 = st.columns(2)
+with col1:
+    st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
+    st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
+    st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
+    st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
+with col2:
+    st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
+    st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
+    st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
+    mc = meta.get("marketCap")
+    st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
+
+ratio, basis = compute_debt_ratio(meta)
+if ratio is None:
+    st.info(f"{T[lang]['field_debt_ratio']}: {T[lang]['debt_unknown']}")
+else:
+    st.markdown(f"**{T[lang]['field_debt_ratio']}:** {ratio:.2%} ({basis})")
+
+if st.button(T[lang]['check_equity']):
+    status, reasons = classify_equity(meta)
+    st.markdown(f"### {T[lang]['result']}: {label(status)}")
+    for r in reasons:
+        st.write("•", r)
+    st.markdown(f"**{T[lang]['equity_rules_title']}:**")
+    st.markdown(T[lang]["equity_rules"])
+    track_event_ga("check_equity", {"symbol": meta["symbol"], "status": status})
+    log_to_sheet("check_equity", {"symbol": meta["symbol"], "status": status})
 
 # ====== ETF TAB ======
 with tab2:
@@ -647,6 +753,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
