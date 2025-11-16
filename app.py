@@ -242,8 +242,6 @@ with st.popover(t("beginner_open")):
         st.markdown(T[lang]["guide_etf"])
     with st.expander(T[lang]["tabs_crypto"]):
         st.markdown(T[lang]["guide_crypto"])
-    with st.expander(T[lang]["tabs_analytics"]):
-        st.markdown(T[lang]["guide_analytics"])
 
 # ---------- Yahoo search helpers ----------
 YAHOO_SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
@@ -649,6 +647,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
