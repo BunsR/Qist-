@@ -159,12 +159,7 @@ T: Dict[str, Dict[str, str]] = {
             "- **Advertises fixed (interest-like) yield?** ‘Guaranteed APR’ resembles **riba** → **Not halal**.\n"
             "- **Staking is service-based (no interest)?** Rewards for providing network/validation service (not lending money) → may be **Halal** if **no interest-like terms**.\n"
             "- **Interest-like terms present?** Tighten verdict to **Not halal**/**Unclassified**."
-        ),
-        "guide_analytics": (
-            "**Analytics (📊)**\n"
-            "- Enter your **Admin PIN** (set in *Secrets* → `admin.pin`).\n"
-            "- Stats log to **Google Sheets** (if `logging.usage_sheet_id` + service account set) and to **GA4** (if `ga.measurement_id` + `ga.api_secret` set)."
-        ),
+               ),
         "tabs_equity": "🏢 Stocks",
         "tabs_etf": "📦 ETFs",
         "tabs_crypto": "🪙 Crypto",
@@ -654,6 +649,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
