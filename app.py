@@ -641,53 +641,60 @@ with tab1:
             except Exception:
                 st.warning("Zoekservice tijdelijk niet beschikbaar; probeer later opnieuw.")
                 results = []
+
         if not results:
             st.error(T[lang]["no_results"])
         else:
+            # Keuze uit zoekresultaten
             options = {f"{r['symbol']} — {r['shortname']} ({r['exchange']})": r for r in results}
             choice = st.selectbox(T[lang]["choose_listing"], list(options.keys()))
             chosen = options[choice]
-        meta = fetch_symbol_metadata(chosen["symbol"])
 
-# Toon altijd; geef alleen een hint over datakwaliteit als het minimaal is
-st.success(T[lang]["valid_listing"])
-quality_msgs = []
-if not (meta.get("sector") or meta.get("industry")):
-    quality_msgs.append("Beperkt profiel (sector/industrie ontbreken)")
-if meta.get("totalDebt") is None or (not meta.get("marketCap") and not meta.get("totalAssets")):
-    quality_msgs.append("Schuldratio kon niet worden berekend (onvoldoende cijfers)")
+            # Haal metadata op
+            meta = fetch_symbol_metadata(chosen["symbol"])
 
-if quality_msgs:
-    st.info(" | ".join(quality_msgs))
+            # Toon altijd; geef alleen hints over datakwaliteit
+            st.success(T[lang]["valid_listing"])
+            quality_msgs = []
+            if not (meta.get("sector") or meta.get("industry")):
+                quality_msgs.append("Beperkt profiel (sector/industrie ontbreken)")
+            if (meta.get("totalDebt") is None) or (not meta.get("marketCap") and not meta.get("totalAssets")):
+                quality_msgs.append("Schuldratio kon niet worden berekend (onvoldoende cijfers)")
+            if quality_msgs:
+                st.info(" | ".join(quality_msgs))
 
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
-    st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
-    st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
-    st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
-with col2:
-    st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
-    st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
-    st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
-    mc = meta.get("marketCap")
-    st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
+            # Basisinformatie
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
+                st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
+                st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
+                st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
+            with col2:
+                st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
+                st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
+                st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
+                mc = meta.get("marketCap")
+                st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
 
-ratio, basis = compute_debt_ratio(meta)
-if ratio is None:
-    st.info(f"{T[lang]['field_debt_ratio']}: {T[lang]['debt_unknown']}")
-else:
-    st.markdown(f"**{T[lang]['field_debt_ratio']}:** {ratio:.2%} ({basis})")
+            # Schuldratio
+            ratio, basis = compute_debt_ratio(meta)
+            if ratio is None:
+                st.info(f"{T[lang]['field_debt_ratio']}: {T[lang]['debt_unknown']}")
+            else:
+                st.markdown(f"**{T[lang]['field_debt_ratio']}:** {ratio:.2%} ({basis})")
 
-if st.button(T[lang]['check_equity']):
-    status, reasons = classify_equity(meta)
-    st.markdown(f"### {T[lang]['result']}: {label(status)}")
-    for r in reasons:
-        st.write("•", r)
-    st.markdown(f"**{T[lang]['equity_rules_title']}:**")
-    st.markdown(T[lang]["equity_rules"])
-    track_event_ga("check_equity", {"symbol": meta["symbol"], "status": status})
-    log_to_sheet("check_equity", {"symbol": meta["symbol"], "status": status})
+            # Halal-check
+            if st.button(T[lang]["check_equity"]):
+                status, reasons = classify_equity(meta)
+                st.markdown(f"### {T[lang]['result']}: {label(status)}")
+                for r in reasons:
+                    st.write("•", r)
+                st.markdown(f"**{T[lang]['equity_rules_title']}:**")
+                st.markdown(T[lang]["equity_rules"])
+                track_event_ga("check_equity", {"symbol": meta["symbol"], "status": status})
+                log_to_sheet("check_equity", {"symbol": meta["symbol"], "status": status})
+
 
 # ====== ETF TAB ======
 with tab2:
@@ -753,6 +760,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
