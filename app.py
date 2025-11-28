@@ -627,9 +627,14 @@ track_event_ga("page_view", {"page": "home", "build": APP_VERSION})
 log_to_sheet("page_view", {"page": "home", "build": APP_VERSION})
 
 # ---------- Tabs ----------
-tab1, tab2, tab3, tab4 = st.tabs([
-    T[lang]["tabs_equity"], T[lang]["tabs_etf"], T[lang]["tabs_crypto"], T[lang]["tabs_analytics"]
+# tab1, tab2, tab3, tab4 = st.tabs([
+#     T[lang]["tabs_equity"], T[lang]["tabs_etf"], T[lang]["tabs_crypto"], T[lang]["tabs_analytics"]
+# ])
+tab1, tab2, tab3 = st.tabs([
+    T[lang]["tabs_equity"], T[lang]["tabs_etf"], T[lang]["tabs_crypto"]
 ])
+
+
 
 # ====== EQUITY TAB ======
 with tab1:
@@ -760,6 +765,7 @@ with tab3:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
