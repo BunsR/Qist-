@@ -401,13 +401,14 @@ def fetch_symbol_metadata(symbol: str):
                 return None
         except Exception:
             return None
+
     name = info.get("longName") or info.get("shortName")
     exchange = info.get("exchange") or fast_value("exchange")
     currency = info.get("currency") or fast_value("currency")
     country = info.get("country")
     sector = info.get("sector")
     industry = info.get("industry")
-    marketCap = info.get("marketCap")        
+    marketCap = info.get("marketCap")
 
     # 3) History: meerdere periodes proberen
     hist_ok = False
@@ -418,7 +419,7 @@ def fetch_symbol_metadata(symbol: str):
                 hist_ok = True
                 break
         except Exception:
-            continue
+            pass
 
     # 4) Balance sheet
     total_debt = total_assets = None
@@ -445,7 +446,7 @@ def fetch_symbol_metadata(symbol: str):
         sector = sector or q.get("sector")
         industry = industry or q.get("industry")
 
-    # 6) Validatie veel ruimer: zolang we iets bruikbaars hebben, gaan we door
+    # 6) Validatie
     is_valid = bool(name or exchange or currency or marketCap or hist_ok)
 
     return {
@@ -759,6 +760,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
