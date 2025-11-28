@@ -401,6 +401,13 @@ def fetch_symbol_metadata(symbol: str):
                 return None
         except Exception:
             return None
+    name = info.get("longName") or info.get("shortName")
+    exchange = info.get("exchange") or fast_value("exchange")
+    currency = info.get("currency") or fast_value("currency")
+    country = info.get("country")
+    sector = info.get("sector")
+    industry = info.get("industry")
+    marketCap = info.get("marketCap")        
 
     # 3) History: meerdere periodes proberen
     hist_ok = False
@@ -454,13 +461,7 @@ def fetch_symbol_metadata(symbol: str):
         "totalAssets": None if pd.isna(total_assets) else total_assets,
         "is_valid": is_valid,
     }
-    name = info.get("longName") or info.get("shortName")
-    exchange = info.get("exchange") or fast_value("exchange")
-    currency = info.get("currency") or fast_value("currency")
-    country = info.get("country")
-    sector = info.get("sector")
-    industry = info.get("industry")
-    marketCap = info.get("marketCap")
+
 
     exchange = info.get("exchange") or fast_value("exchange")
     currency = info.get("currency") or fast_value("currency")
@@ -758,6 +759,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
