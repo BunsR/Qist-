@@ -725,41 +725,42 @@ with tab3:
         track_event_ga("check_crypto", {"name": name_crypto or "-", "status": status})
         log_to_sheet("check_crypto", {"name": name_crypto or "-", "status": status})
 
-# ====== ANALYTICS TAB ======
-with tab4:
-    pin = st.text_input(T[lang]["admin_pin"], type="password")
-    if pin and "admin" in st.secrets and pin == st.secrets["admin"]["pin"]:
-        st.success(T[lang]["show_stats"])
-        try:
-            import gspread
-            from google.oauth2.service_account import Credentials
-            sheet_id = st.secrets["logging"]["usage_sheet_id"]
-            creds = Credentials.from_service_account_info(
-                st.secrets["gcp_service_account"],
-                scopes=['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-            )
-            gc = gspread.authorize(creds)
-            sh = gc.open_by_key(sheet_id)
-            ws = sh.sheet1
-            rows = ws.get_all_records()
-            df = pd.DataFrame(rows)
-            st.write("Totaal events:", len(df))
-            if "event" in df.columns and not df["event"].empty:
-                st.bar_chart(df["event"].value_counts())
-            if "extra" in df.columns:
-                try:
-                    extra_df = pd.json_normalize(df["extra"].apply(lambda x: json.loads(x) if x else {}))
-                    st.write("Voorbeeld van extra gegevens:", extra_df.head(10))
-                except Exception:
-                    pass
-        except Exception:
-            st.info(T[lang]["stats_tip"])
-    else:
-        st.info(T[lang]["stats_tip"])
+# # ====== ANALYTICS TAB ======
+# with tab4:
+#     pin = st.text_input(T[lang]["admin_pin"], type="password")
+#     if pin and "admin" in st.secrets and pin == st.secrets["admin"]["pin"]:
+#         st.success(T[lang]["show_stats"])
+#         try:
+#             import gspread
+#             from google.oauth2.service_account import Credentials
+#             sheet_id = st.secrets["logging"]["usage_sheet_id"]
+#             creds = Credentials.from_service_account_info(
+#                 st.secrets["gcp_service_account"],
+#                 scopes=['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+#             )
+#             gc = gspread.authorize(creds)
+#             sh = gc.open_by_key(sheet_id)
+#             ws = sh.sheet1
+#             rows = ws.get_all_records()
+#             df = pd.DataFrame(rows)
+#             st.write("Totaal events:", len(df))
+#             if "event" in df.columns and not df["event"].empty:
+#                 st.bar_chart(df["event"].value_counts())
+#             if "extra" in df.columns:
+#                 try:
+#                     extra_df = pd.json_normalize(df["extra"].apply(lambda x: json.loads(x) if x else {}))
+#                     st.write("Voorbeeld van extra gegevens:", extra_df.head(10))
+#                 except Exception:
+#                     pass
+#         except Exception:
+#             st.info(T[lang]["stats_tip"])
+#     else:
+#         st.info(T[lang]["stats_tip"])
 
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
