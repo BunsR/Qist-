@@ -64,15 +64,15 @@ T: Dict[str, Dict[str, str]] = {
             "- **Staking is service-based (geen rente)?** Beloningen als vergoeding voor netwerk/validatie-service (niet voor geld uitlenen) → kan **Halal** zijn **als** er géén rente-achtige voorwaarden zijn.\n"
             "- **Rente-achtige voorwaarden aanwezig?** Dan verscherpt de uitkomst naar **Niet halal** of **Ongeclassificeerd**."
         ),
-        # "guide_analytics": (
-        #     "**Analytics (📊)**\n"
-        #     "- Voer je **Admin-PIN** in (ingesteld in *Secrets* → `admin.pin`).\n"
-        #     "- Statistieken loggen naar **Google Sheets** (als `logging.usage_sheet_id` + service-account gezet zijn) en naar **GA4** (als `ga.measurement_id` + `ga.api_secret` gezet zijn)."
-        # ),
+        "guide_analytics": (
+            "**Analytics (📊)**\n"
+            "- Voer je **Admin-PIN** in (ingesteld in *Secrets* → `admin.pin`).\n"
+            "- Statistieken loggen naar **Google Sheets** (als `logging.usage_sheet_id` + service-account gezet zijn) en naar **GA4** (als `ga.measurement_id` + `ga.api_secret` gezet zijn)."
+        ),
         "tabs_equity": "🏢 Aandelen",
         "tabs_etf": "📦 ETF's",
         "tabs_crypto": "🪙 Crypto",
-        # "tabs_analytics": "📊 Analytics",
+        "tabs_analytics": "📊 Analytics",
         "search_ph": "Zoek op bedrijfsnaam, ticker of ISIN (bijv. ASML, AAPL, NL0010273215)",
         "choose_listing": "Kies de exacte notering:",
         "no_results": "Geen noteringen gevonden. Controleer de spelling of probeer een andere zoekterm.",
@@ -163,7 +163,7 @@ T: Dict[str, Dict[str, str]] = {
         "tabs_equity": "🏢 Stocks",
         "tabs_etf": "📦 ETFs",
         "tabs_crypto": "🪙 Crypto",
-        # "tabs_analytics": "📊 Analytics",
+        "tabs_analytics": "📊 Analytics",
         "search_ph": "Search by company name, ticker or ISIN (e.g., ASML, AAPL, NL0010273215)",
         "choose_listing": "Select the exact listing:",
         "no_results": "No listings found. Check spelling or try another query.",
@@ -760,6 +760,7 @@ with tab3:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
