@@ -72,7 +72,7 @@ T: Dict[str, Dict[str, str]] = {
         "tabs_equity": "🏢 Aandelen",
         "tabs_etf": "📦 ETF's",
         "tabs_crypto": "🪙 Crypto",
-        "tabs_analytics": "📊 Analytics",
+        # "tabs_analytics": "📊 Analytics",
         "search_ph": "Zoek op bedrijfsnaam, ticker of ISIN (bijv. ASML, AAPL, NL0010273215)",
         "choose_listing": "Kies de exacte notering:",
         "no_results": "Geen noteringen gevonden. Controleer de spelling of probeer een andere zoekterm.",
@@ -163,7 +163,7 @@ T: Dict[str, Dict[str, str]] = {
         "tabs_equity": "🏢 Stocks",
         "tabs_etf": "📦 ETFs",
         "tabs_crypto": "🪙 Crypto",
-        "tabs_analytics": "📊 Analytics",
+        # "tabs_analytics": "📊 Analytics",
         "search_ph": "Search by company name, ticker or ISIN (e.g., ASML, AAPL, NL0010273215)",
         "choose_listing": "Select the exact listing:",
         "no_results": "No listings found. Check spelling or try another query.",
@@ -760,6 +760,7 @@ with tab3:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
