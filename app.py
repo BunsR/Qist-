@@ -663,19 +663,19 @@ with tab1:
             if quality_msgs:
                 st.info(" | ".join(quality_msgs))
 
-            # Basisinformatie
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
-                st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
-                st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
-                st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
-            with col2:
-                st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
-                st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
-                st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
-                mc = meta.get("marketCap")
-                st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
+            # # Basisinformatie
+            # col1, col2 = st.columns(2)
+            # with col1:
+            #     st.markdown(f"**{T[lang]['field_name']}:** {meta.get('name') or chosen['shortname']}")
+            #     st.markdown(f"**{T[lang]['field_ticker']}:** {meta['symbol']}")
+            #     st.markdown(f"**{T[lang]['field_exchange']}:** {meta.get('exchange') or chosen['exchange']}")
+            #     st.markdown(f"**{T[lang]['field_currency']}:** {meta.get('currency') or '-'}")
+            # with col2:
+            #     st.markdown(f"**{T[lang]['field_country']}:** {meta.get('country') or '-'}")
+            #     st.markdown(f"**{T[lang]['field_sector']}:** {meta.get('sector') or '-'}")
+            #     st.markdown(f"**{T[lang]['field_industry']}:** {meta.get('industry') or '-'}")
+            #     mc = meta.get("marketCap")
+            #     st.markdown(f"**{T[lang]['field_mcap']}:** {f'{mc:,.0f}' if mc else '-'}")
 
             # Schuldratio
             ratio, basis = compute_debt_ratio(meta)
@@ -760,6 +760,7 @@ with tab4:
 # ---------- Footer ----------
 st.markdown("---")
 st.caption(T[lang]["footer"])
+
 
 
 
